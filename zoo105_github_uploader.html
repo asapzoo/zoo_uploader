@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoo 105 — RSS Uploader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #ff3c3c;
+    --accent2: #7c4dff;
+    --green: #00e676;
+    --gold: #ffd740;
+    --text: #e8e8f0;
+    --muted: #7070a0;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    font-size: 15px;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-family: 'Bebas Neue', cursive; font-size: 28px; letter-spacing: 2px; color: var(--accent); }
+  .logo span { color: var(--text); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .btn-hdr {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 14px; border-radius: var(--radius); cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.5px; transition: all .2s;
+  }
+  .btn-hdr:hover { border-color: var(--accent2); color: var(--text); }
+
+  /* MAIN */
+  main { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+
+  /* PANELS */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 20px; }
+  .panel-title {
+    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* FORM */
+  label { display: block; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  input, select, textarea {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px; border-radius: 7px;
+    font-family: 'DM Mono', monospace; font-size: 13px; outline: none;
+    transition: border-color .2s; appearance: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent2); }
+  .field { margin-bottom: 18px; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* TYPE GRID */
+  .type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .type-grid-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .type-section-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+
+  .type-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    padding: 12px 10px 10px; border-radius: 8px; cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 12px; text-align: center;
+    transition: all .2s; line-height: 1.4; position: relative;
+  }
+  .type-btn:hover { border-color: var(--accent2); color: var(--text); }
+  .type-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(255,60,60,.08); }
+  .type-btn .type-icon { font-size: 20px; display: block; margin-bottom: 5px; }
+
+  /* Edit overlay on custom type */
+  .type-btn .edit-overlay {
+    position: absolute; top: 4px; right: 4px;
+    display: none; gap: 3px;
+  }
+  .type-btn:hover .edit-overlay { display: flex; }
+  .type-btn .edit-overlay button {
+    width: 20px; height: 20px; padding: 0; border-radius: 4px; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: none; transition: all .15s;
+  }
+  .edit-btn-edit { background: rgba(124,77,255,.2); color: #a080ff; }
+  .edit-btn-del  { background: rgba(255,60,60,.2); color: var(--accent); }
+  .edit-btn-edit:hover { background: rgba(124,77,255,.5); }
+  .edit-btn-del:hover  { background: rgba(255,60,60,.5); }
+
+  /* ADD TYPE BUTTON */
+  .type-btn-add {
+    background: transparent; border: 1px dashed var(--border); color: var(--muted);
+    padding: 12px 10px; border-radius: 8px; cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 12px; text-align: center;
+    transition: all .2s; line-height: 1.6;
+  }
+  .type-btn-add:hover { border-color: var(--accent2); color: var(--accent2); }
+  .type-btn-add .type-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+
+  /* SEPARATOR */
+  .type-separator { grid-column: 1 / -1; border: none; border-top: 1px dashed var(--border); margin: 4px 0; }
+
+  /* XML BLOCK */
+  .xml-block {
+    background: #090910; border: 1px solid var(--border); border-radius: 7px;
+    padding: 16px; font-family: 'DM Mono', monospace; font-size: 11.5px;
+    line-height: 1.7; color: #7090c0; white-space: pre-wrap;
+    word-break: break-all; max-height: 260px; overflow-y: auto;
+  }
+
+  /* BUTTONS */
+  .btn-submit {
+    width: 100%; padding: 16px; background: var(--accent); color: white; border: none;
+    border-radius: var(--radius); font-family: 'Bebas Neue', cursive;
+    font-size: 22px; letter-spacing: 3px; cursor: pointer; transition: all .2s; margin-top: 8px;
+  }
+  .btn-submit:hover { background: #ff5555; transform: translateY(-1px); }
+  .btn-submit:disabled { background: var(--muted); cursor: not-allowed; transform: none; opacity: .6; }
+
+  .btn-secondary {
+    width: 100%; padding: 12px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer;
+    transition: all .2s; margin-top: 10px;
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--text); }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 14px 22px;
+    border-radius: var(--radius); font-family: 'DM Mono', monospace; font-size: 13px;
+    z-index: 999; transition: all .3s; opacity: 0; transform: translateY(20px); max-width: 380px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: #0d3d24; border: 1px solid var(--green); color: var(--green); }
+  .toast.error   { background: #3d0d0d; border: 1px solid var(--accent); color: #ff8080; }
+  .toast.info    { background: #1a1a40; border: 1px solid var(--accent2); color: #a080ff; }
+
+  /* OVERLAYS */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay.hidden { display: none; }
+  .modal-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 36px; width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title { font-family: 'Bebas Neue', cursive; font-size: 30px; letter-spacing: 2px; margin-bottom: 4px; }
+  .modal-sub { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+  .btn-save {
+    width: 100%; padding: 14px; background: var(--accent2); color: white; border: none;
+    border-radius: var(--radius); font-family: 'Bebas Neue', cursive;
+    font-size: 20px; letter-spacing: 2px; cursor: pointer; transition: background .2s;
+  }
+  .btn-save:hover { background: #9b73ff; }
+
+  .btn-danger {
+    width: 100%; padding: 12px; background: transparent; color: var(--accent);
+    border: 1px solid rgba(255,60,60,.3); border-radius: var(--radius);
+    font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer;
+    transition: all .2s; margin-top: 10px;
+  }
+  .btn-danger:hover { background: rgba(255,60,60,.08); border-color: var(--accent); }
+
+  .btn-cancel {
+    width: 100%; padding: 12px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer;
+    transition: all .2s; margin-top: 8px;
+  }
+  .btn-cancel:hover { border-color: var(--muted); color: var(--text); }
+
+  .help-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+  .help-text code { background: var(--surface2); padding: 1px 5px; border-radius: 3px; color: var(--gold); }
+
+  /* MASK TOKENS */
+  .token-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .token {
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--gold); cursor: pointer; transition: all .15s;
+  }
+  .token:hover { border-color: var(--gold); background: rgba(255,215,64,.1); }
+
+  /* ICON PREVIEW */
+  .icon-preview { font-size: 28px; text-align: center; padding: 8px; }
+
+  .section-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(255,60,60,.2);
+  }
+
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.3); border-top-color: white;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  select option { background: #1a1a26; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ GITHUB CONFIG OVERLAY ══════════════════════ -->
+<div class="overlay hidden" id="configOverlay">
+  <div class="modal-box">
+    <div class="modal-title" style="color:var(--accent2)">⚙ GitHub Config</div>
+    <div class="modal-sub">Imposta le credenziali GitHub per pubblicare il feed RSS</div>
+
+    <div class="field">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="cfgToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+      <div class="help-text">→ github.com/settings/tokens → New token → scope: <b>repo</b> (Contents read/write)</div>
+    </div>
+    <div class="row-2">
+      <div class="field">
+        <label>Owner (username)</label>
+        <input type="text" id="cfgOwner" placeholder="tuousername">
+      </div>
+      <div class="field">
+        <label>Repository</label>
+        <input type="text" id="cfgRepo" placeholder="zoo105-feed">
+      </div>
+    </div>
+    <div class="field">
+      <label>Percorso file XML nel repo</label>
+      <input type="text" id="cfgPath" placeholder="xml_rss.xml" value="xml_rss.xml">
+      <div class="help-text">Es: <code>xml_rss.xml</code> oppure <code>feed/zoo105.xml</code></div>
+    </div>
+    <div class="field">
+      <label>Branch</label>
+      <input type="text" id="cfgBranch" placeholder="main" value="main">
+    </div>
+
+    <label class="check-row" style="margin-top:4px;margin-bottom:16px">
+      <input type="checkbox" id="cfgRemember">
+      <span>Ricorda configurazione (persiste alla chiusura del browser)<br>
+      <b style="color:rgba(255,60,60,.7)">⚠</b> Il token resta nel browser — non usare su dispositivi condivisi.</span>
+    </label>
+
+    <button class="btn-save" onclick="saveConfig()">SALVA CONFIGURAZIONE</button>
+    <button class="btn-cancel" onclick="closeOverlay('configOverlay')">Annulla</button>
+  </div>
+</div>
+
+<!-- ══════════════════════ CUSTOM TYPE OVERLAY ══════════════════════ -->
+<div class="overlay hidden" id="typeOverlay">
+  <div class="modal-box">
+    <div class="modal-title" id="typeModalTitle" style="color:var(--gold)">＋ Nuovo Tipo</div>
+    <div class="modal-sub" id="typeModalSub">Crea una maschera personalizzata per questo tipo di episodio</div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Nome tipo</label>
+        <input type="text" id="tNome" placeholder="es. Polaroid" oninput="updateTypePreview()">
+      </div>
+      <div class="field">
+        <label>Icona (emoji)</label>
+        <input type="text" id="tIcon" placeholder="📸" maxlength="4" oninput="updateTypePreview()">
+      </div>
+    </div>
+
+    <div class="icon-preview" id="tIconPreview">?</div>
+
+    <div class="field">
+      <label>MIME type</label>
+      <select id="tMime" onchange="updateTypePreview()">
+        <option value="audio/mpeg">🎵 Audio MP3 (audio/mpeg)</option>
+        <option value="video/mp4">🎬 Video MP4 (video/mp4)</option>
+        <option value="text/plain">📄 Testo (text/plain)</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label>Maschera Titolo</label>
+      <div class="token-bar" id="tokenBarTitle"></div>
+      <input type="text" id="tMaskTitle" placeholder="105 Polaroyd #DD#-#MM#-#YYYY#-The Jackal" oninput="updateTypePreview()">
+    </div>
+
+    <div class="field">
+      <label>Maschera Descrizione</label>
+      <div class="token-bar" id="tokenBarDesc"></div>
+      <input type="text" id="tMaskDesc" placeholder="105 Polaroyd #DD#-#MM#-#YYYY#-The Jackal" oninput="updateTypePreview()">
+    </div>
+
+    <div class="field">
+      <div class="section-label">Anteprima (con data odierna)</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:14px">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gold);margin-bottom:4px" id="pvTitle">—</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)" id="pvDesc">—</div>
+      </div>
+    </div>
+
+    <div class="help-text" id="helpMask"></div>
+
+    <button class="btn-save" onclick="saveCustomType()">SALVA TIPO</button>
+    <button class="btn-danger hidden" id="btnDeleteType" onclick="deleteCustomType()">🗑 Elimina questo tipo</button>
+    <button class="btn-cancel" onclick="closeOverlay('typeOverlay')">Annulla</button>
+  </div>
+</div>
+
+<!-- ══════════════════════ HEADER ══════════════════════ -->
+<header>
+  <div class="logo">Zoo<span>105</span> RSS</div>
+  <div class="header-right">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">Non configurato</span>
+    <button class="btn-hdr" onclick="openConfig()">⚙ GitHub</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- STEP 1: TIPO EPISODIO -->
+  <div class="panel">
+    <div class="panel-title">01 — Tipo episodio</div>
+
+    <div class="type-section-label" style="margin-bottom:10px">Tipi fissi</div>
+    <div class="type-grid" id="typeGridFixed"></div>
+
+    <div style="margin-top:18px;margin-bottom:10px" class="type-section-label">Tipi personalizzati</div>
+    <div class="type-grid" id="typeGridCustom"></div>
+
+    <div class="io-bar" style="margin-top:16px">
+      <button class="btn-io export" onclick="exportTypes()">⬇ Esporta tipi (JSON)</button>
+      <button class="btn-io import" onclick="document.getElementById('importFile').click()">⬆ Importa tipi (JSON)</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importTypes(event)">
+    </div>
+
+  </div>
+
+  <!-- STEP 2: DATA & URL -->
+  <div class="panel">
+    <div class="panel-title">02 — Data & URL media</div>
+
+    <div class="row-3">
+      <div class="field">
+        <label>Giorno</label>
+        <input type="number" id="day" min="1" max="31" placeholder="17">
+      </div>
+      <div class="field">
+        <label>Mese</label>
+        <input type="number" id="month" min="1" max="12" placeholder="03">
+      </div>
+      <div class="field">
+        <label>Anno</label>
+        <input type="number" id="year" placeholder="2026">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>URL file media (link diretto)</label>
+      <input type="url" id="mediaUrl" placeholder="https://app.talkshoe.com/drive_files/download/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.mp3" oninput="onUrlChange()">
+    </div>
+
+    <div class="field">
+      <label>GUID — codice univoco episodio</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="itemGuid" placeholder="905f7e3f-1458-479c-9060-f9c006ed6ec7" oninput="updateXmlPreview()" style="font-family:'DM Mono',monospace;letter-spacing:.5px">
+        <button onclick="autoGuid()" title="Estrai dall'URL" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:10px 12px;border-radius:7px;cursor:pointer;font-size:13px;white-space:nowrap;transition:all .2s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↻ da URL</button>
+      </div>
+      <div class="help-text">Il pulsante estrae l'UUID dall'URL automaticamente.</div>
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Tipo MIME</label>
+        <select id="mimeType" onchange="onMimeChange()">
+          <option value="audio/mpeg" data-len="100123123">🎵 Audio MP3 (audio/mpeg)</option>
+          <option value="video/mp4" data-len="0">🎬 Video MP4 (video/mp4)</option>
+          <option value="text/plain" data-len="0">📄 Testo (text/plain)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Dimensione (length)</label>
+        <input type="number" id="fileLength" placeholder="100123123" value="100123123">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STEP 3: TITOLO & DESCRIZIONE -->
+  <div class="panel">
+    <div class="panel-title">03 — Titolo & Descrizione</div>
+
+    <div class="field">
+      <label>Titolo item</label>
+      <input type="text" id="itemTitle" placeholder="Verrà generato automaticamente dal tipo" oninput="updateXmlPreview()">
+    </div>
+
+    <div class="field">
+      <label>Descrizione item</label>
+      <input type="text" id="itemDesc" placeholder="Verrà generata automaticamente dal tipo" oninput="updateXmlPreview()">
+    </div>
+
+    <button class="btn-secondary" onclick="autoFillFromType()">↻ Rigenera da template</button>
+
+    <div style="margin-top:18px">
+      <div class="section-label">Preview item XML</div>
+      <div class="xml-block" id="xmlPreview">← Compila i campi per visualizzare l'anteprima XML</div>
+    </div>
+  </div>
+
+  <!-- SUBMIT -->
+  <button class="btn-submit" id="submitBtn" onclick="publishItem()" disabled>
+    ⇑ PUBBLICA SU GITHUB
+  </button>
+  <div id="submitStatus" style="text-align:center;margin-top:12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)"></div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── TIPI FISSI ─────────────────────────────────────────────────────────────
+const FIXED_TYPES = [
+  { id:'zoo', label:'Zoo\nSettimana', icon:'🎧',
+    maskTitle:'Zoo-#DD#-#MM#-#YYYY#-#DAY#-S@m',
+    maskDesc:'Zoo-#DAY#,#DD#-#MM#-#YYYY#-S@m',
+    mime:'audio/mpeg' },
+  { id:'zootv', label:'ZooTv\nVideo', icon:'📺',
+    maskTitle:'ZooTv-#DD#-#MM#-#YYYY#-#DAY#-S@m',
+    maskDesc:'ZooTv-#DAY#,#DD#-#MM#-#YYYY#-S@m',
+    mime:'video/mp4' },
+  { id:'compilation', label:'Zoo\nCompilation', icon:'🎵',
+    maskTitle:'Zoo-#DD#-#MM#-#YYYY#-Compilation-S@m',
+    maskDesc:'Zoo-#DAY#,#DD#-#MM#-#YYYY#-Compilation-S@m',
+    mime:'audio/mpeg' },
+];
+
+const DAYS_IT  = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+const TOKENS   = ['#DD#','#MM#','#YYYY#','#DAY#'];
+const MASK_HELP = 'Tokens: <code>#DD#</code> giorno, <code>#MM#</code> mese, <code>#YYYY#</code> anno, <code>#DAY#</code> giorno settimana (Lun/Mar…)';
+
+let selectedType   = null;
+let config         = {};
+let customTypes    = [];  // loaded from localStorage
+let editingTypeId  = null; // id of type being edited, null = new
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init() {
+  // GitHub config: check localStorage first (persistent), then sessionStorage (temporary)
+  const savedCfgLocal   = localStorage.getItem('zoo105_config');
+  const savedCfgSession = sessionStorage.getItem('zoo105_config');
+  if (savedCfgLocal)   { config = JSON.parse(savedCfgLocal);   applyConfig(); }
+  else if (savedCfgSession) { config = JSON.parse(savedCfgSession); applyConfig(); }
+
+  // Custom types (localStorage, persistent)
+  const savedTypes = localStorage.getItem('zoo105_custom_types');
+  if (savedTypes) customTypes = JSON.parse(savedTypes);
+
+  renderTypeGrids();
+
+  // Today's date
+  const now = new Date();
+  document.getElementById('day').value   = now.getDate();
+  document.getElementById('month').value = now.getMonth() + 1;
+  document.getElementById('year').value  = now.getFullYear();
+
+  // Token bar in type modal
+  ['tokenBarTitle','tokenBarDesc'].forEach(barId => {
+    const bar = document.getElementById(barId);
+    const isTitle = barId.includes('Title');
+    TOKENS.forEach(tok => {
+      const b = document.createElement('button');
+      b.className = 'token';
+      b.textContent = tok;
+      b.onclick = () => insertToken(isTitle ? 'tMaskTitle' : 'tMaskDesc', tok);
+      bar.appendChild(b);
+    });
+  });
+
+  if (!config.token) {
+    document.getElementById('configOverlay').classList.remove('hidden');
+  }
+
+  updateXmlPreview();
+}
+
+// ─── RENDER TYPE GRIDS ───────────────────────────────────────────────────────
+function renderTypeGrids() {
+  // Fixed
+  const fixedGrid = document.getElementById('typeGridFixed');
+  fixedGrid.innerHTML = '';
+  FIXED_TYPES.forEach(t => {
+    fixedGrid.appendChild(makeTypeBtnFixed(t));
+  });
+
+  // Custom
+  const customGrid = document.getElementById('typeGridCustom');
+  customGrid.innerHTML = '';
+  customTypes.forEach(t => {
+    customGrid.appendChild(makeTypeBtnCustom(t));
+  });
+
+  // "Add new" button always last
+  const addBtn = document.createElement('button');
+  addBtn.className = 'type-btn-add';
+  addBtn.innerHTML = '<span class="type-icon">＋</span>Aggiungi<br>tipo';
+  addBtn.onclick = () => openTypeModal(null);
+  customGrid.appendChild(addBtn);
+}
+
+function makeTypeBtnFixed(t) {
+  const btn = document.createElement('button');
+  btn.className = 'type-btn';
+  btn.dataset.id = t.id;
+  btn.innerHTML = `<span class="type-icon">${t.icon}</span>${t.label.replace('\n','<br>')}`;
+  btn.onclick = () => selectType(t.id, false);
+  return btn;
+}
+
+function makeTypeBtnCustom(t) {
+  const btn = document.createElement('button');
+  btn.className = 'type-btn';
+  btn.dataset.id = t.id;
+
+  const editBar = document.createElement('div');
+  editBar.className = 'edit-overlay';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'edit-btn-edit';
+  editBtn.textContent = '✎';
+  editBtn.title = 'Modifica';
+  editBtn.onclick = (e) => { e.stopPropagation(); openTypeModal(t.id); };
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'edit-btn-del';
+  delBtn.textContent = '✕';
+  delBtn.title = 'Elimina';
+  delBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (confirm(`Eliminare il tipo "${t.label}"?`)) {
+      customTypes = customTypes.filter(x => x.id !== t.id);
+      saveCustomTypes();
+      renderTypeGrids();
+      if (selectedType && selectedType.id === t.id) selectedType = null;
+    }
+  };
+
+  editBar.appendChild(editBtn);
+  editBar.appendChild(delBtn);
+  btn.appendChild(editBar);
+
+  btn.insertAdjacentHTML('beforeend', `<span class="type-icon">${t.icon}</span>${t.label.replace('\n','<br>')}`);
+  btn.onclick = () => selectType(t.id, true);
+  return btn;
+}
+
+// ─── TYPE MODAL ──────────────────────────────────────────────────────────────
+function openTypeModal(id) {
+  editingTypeId = id;
+  const existing = id ? customTypes.find(t => t.id === id) : null;
+
+  document.getElementById('typeModalTitle').textContent = existing ? '✎ Modifica Tipo' : '＋ Nuovo Tipo';
+  document.getElementById('typeModalSub').textContent   = existing ? `Modifica la maschera per "${existing.label}"` : 'Crea una maschera personalizzata per questo tipo di episodio';
+  document.getElementById('tNome').value      = existing ? existing.label : '';
+  document.getElementById('tIcon').value      = existing ? existing.icon  : '';
+  document.getElementById('tMime').value      = existing ? existing.mime  : 'audio/mpeg';
+  document.getElementById('tMaskTitle').value = existing ? existing.maskTitle : '';
+  document.getElementById('tMaskDesc').value  = existing ? existing.maskDesc  : '';
+  document.getElementById('btnDeleteType').classList.toggle('hidden', !existing);
+
+  document.getElementById('helpMask').innerHTML = MASK_HELP;
+  updateTypePreview();
+  document.getElementById('typeOverlay').classList.remove('hidden');
+}
+
+function updateTypePreview() {
+  const icon = document.getElementById('tIcon').value || '?';
+  document.getElementById('tIconPreview').textContent = icon;
+  const now = new Date();
+  const tmp = {
+    maskTitle: document.getElementById('tMaskTitle').value,
+    maskDesc:  document.getElementById('tMaskDesc').value,
+  };
+  document.getElementById('pvTitle').textContent = applyMaskWith(tmp.maskTitle, now.getDate(), now.getMonth()+1, now.getFullYear());
+  document.getElementById('pvDesc').textContent  = applyMaskWith(tmp.maskDesc,  now.getDate(), now.getMonth()+1, now.getFullYear());
+}
+
+function insertToken(fieldId, token) {
+  const el = document.getElementById(fieldId);
+  const s = el.selectionStart, e = el.selectionEnd;
+  el.value = el.value.slice(0,s) + token + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = s + token.length;
+  el.focus();
+  updateTypePreview();
+}
+
+function saveCustomType() {
+  const nome  = document.getElementById('tNome').value.trim();
+  const icon  = document.getElementById('tIcon').value.trim() || '📌';
+  const mime  = document.getElementById('tMime').value;
+  const mT    = document.getElementById('tMaskTitle').value.trim();
+  const mD    = document.getElementById('tMaskDesc').value.trim();
+
+  if (!nome || !mT) { showToast('Nome e Maschera Titolo sono obbligatori', 'error'); return; }
+
+  if (editingTypeId) {
+    // Update existing
+    const idx = customTypes.findIndex(t => t.id === editingTypeId);
+    if (idx !== -1) {
+      customTypes[idx] = { ...customTypes[idx], label: nome, icon, mime, maskTitle: mT, maskDesc: mD };
+    }
+  } else {
+    // New
+    const id = 'custom_' + Date.now();
+    customTypes.push({ id, label: nome, icon, mime, maskTitle: mT, maskDesc: mD });
+  }
+
+  saveCustomTypes();
+  renderTypeGrids();
+  closeOverlay('typeOverlay');
+  showToast(editingTypeId ? `Tipo "${nome}" aggiornato ✓` : `Tipo "${nome}" aggiunto ✓`, 'success');
+}
+
+function deleteCustomType() {
+  if (!editingTypeId) return;
+  const t = customTypes.find(x => x.id === editingTypeId);
+  if (!confirm(`Eliminare definitivamente il tipo "${t ? t.label : ''}"?`)) return;
+  customTypes = customTypes.filter(x => x.id !== editingTypeId);
+  saveCustomTypes();
+  renderTypeGrids();
+  if (selectedType && selectedType.id === editingTypeId) selectedType = null;
+  closeOverlay('typeOverlay');
+  showToast('Tipo eliminato', 'info');
+}
+
+function saveCustomTypes() {
+  localStorage.setItem('zoo105_custom_types', JSON.stringify(customTypes));
+}
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+function openConfig() {
+  if (config.token) document.getElementById('cfgToken').value  = config.token;
+  if (config.owner) document.getElementById('cfgOwner').value  = config.owner;
+  if (config.repo)  document.getElementById('cfgRepo').value   = config.repo;
+  if (config.path)  document.getElementById('cfgPath').value   = config.path;
+  if (config.branch)document.getElementById('cfgBranch').value = config.branch;
+  // Check the box if config was saved in localStorage
+  const cbRemember = document.getElementById('cfgRemember');
+  if (cbRemember) cbRemember.checked = !!localStorage.getItem('zoo105_config');
+  document.getElementById('configOverlay').classList.remove('hidden');
+}
+
+function saveConfig() {
+  config = {
+    token:  document.getElementById('cfgToken').value.trim(),
+    owner:  document.getElementById('cfgOwner').value.trim(),
+    repo:   document.getElementById('cfgRepo').value.trim(),
+    path:   document.getElementById('cfgPath').value.trim()   || 'xml_rss.xml',
+    branch: document.getElementById('cfgBranch').value.trim() || 'main',
+  };
+  if (!config.token || !config.owner || !config.repo) {
+    showToast('Compila Token, Owner e Repository', 'error'); return;
+  }
+  const remember = document.getElementById('cfgRemember').checked;
+  if (remember) {
+    localStorage.setItem('zoo105_config', JSON.stringify(config));
+    sessionStorage.removeItem('zoo105_config');
+  } else {
+    sessionStorage.setItem('zoo105_config', JSON.stringify(config));
+    localStorage.removeItem('zoo105_config');
+  }
+  applyConfig();
+  closeOverlay('configOverlay');
+  showToast(remember ? 'Configurazione salvata (persistente) ✓' : 'Configurazione salvata (sessione) ✓', 'success');
+}
+
+function applyConfig() {
+  const ok = config.token && config.owner && config.repo;
+  document.getElementById('statusDot').className = 'status-dot' + (ok ? ' connected' : '');
+  document.getElementById('statusText').textContent = ok ? `${config.owner}/${config.repo}` : 'Non configurato';
+  document.getElementById('submitBtn').disabled = !ok;
+}
+
+function closeOverlay(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+// ─── TYPE SELECTION ──────────────────────────────────────────────────────────
+function selectType(id, isCustom) {
+  const all = isCustom ? customTypes : FIXED_TYPES;
+  selectedType = all.find(t => t.id === id) || null;
+  // Highlight
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === id);
+  });
+  if (!selectedType) return;
+  // Set mime
+  const sel = document.getElementById('mimeType');
+  for (let o of sel.options) { if (o.value === selectedType.mime) { sel.value = o.value; break; } }
+  onMimeChange();
+  autoFillFromType();
+}
+
+function applyMaskWith(mask, d, m, y) {
+  const dd   = String(d).padStart(2,'0');
+  const mm   = String(m).padStart(2,'0');
+  const yyyy = String(y);
+  const day  = DAYS_IT[new Date(y, m-1, d).getDay()];
+  return (mask||'')
+    .replace(/#DD#/g, dd).replace(/#MM#/g, mm)
+    .replace(/#YYYY#/g, yyyy).replace(/#DAY#/g, day);
+}
+
+function applyMask(mask) {
+  const d = parseInt(document.getElementById('day').value)   || new Date().getDate();
+  const m = parseInt(document.getElementById('month').value) || new Date().getMonth()+1;
+  const y = parseInt(document.getElementById('year').value)  || new Date().getFullYear();
+  return applyMaskWith(mask, d, m, y);
+}
+
+function autoFillFromType() {
+  if (!selectedType) return;
+  document.getElementById('itemTitle').value = applyMask(selectedType.maskTitle);
+  document.getElementById('itemDesc').value  = applyMask(selectedType.maskDesc);
+  updateXmlPreview();
+}
+
+// ─── URL / GUID ───────────────────────────────────────────────────────────────
+function extractGuid(url) {
+  const match = url.match(/download\/([a-f0-9-]{36})\./i);
+  if (match) return match[1];
+  const parts = url.split('/');
+  const last  = parts[parts.length - 1];
+  return last.replace(/\.[^.]+$/, '') || url;
+}
+
+function onUrlChange() {
+  const url = document.getElementById('mediaUrl').value.trim();
+  if (url.endsWith('.mp3')) {
+    document.getElementById('mimeType').value    = 'audio/mpeg';
+    document.getElementById('fileLength').value  = '100123123';
+  } else if (url.endsWith('.mp4')) {
+    document.getElementById('mimeType').value    = 'video/mp4';
+    document.getElementById('fileLength').value  = '0';
+  }
+  const guidField = document.getElementById('itemGuid');
+  if (!guidField.value.trim()) {
+    const extracted = extractGuid(url);
+    if (extracted && extracted !== url) guidField.value = extracted;
+  }
+  updateXmlPreview();
+}
+
+function autoGuid() {
+  const url = document.getElementById('mediaUrl').value.trim();
+  document.getElementById('itemGuid').value = extractGuid(url) || '';
+  updateXmlPreview();
+}
+
+function onMimeChange() {
+  const sel = document.getElementById('mimeType');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('fileLength').value = opt.dataset.len;
+  updateXmlPreview();
+}
+
+// ─── XML ──────────────────────────────────────────────────────────────────────
+function getPubDate() {
+  const d   = parseInt(document.getElementById('day').value);
+  const m   = parseInt(document.getElementById('month').value) - 1;
+  const y   = parseInt(document.getElementById('year').value);
+  const now = new Date();
+  const dt  = new Date(y, m, d, now.getHours(), now.getMinutes(), now.getSeconds());
+  const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pad = n => String(n).padStart(2,'0');
+  const o = -dt.getTimezoneOffset();
+  const sign = o >= 0 ? '+' : '-';
+  const offset = sign + pad(Math.floor(Math.abs(o)/60)) + pad(Math.abs(o)%60);
+  return `${days[dt.getDay()]}, ${pad(dt.getDate())} ${months[dt.getMonth()]} ${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())} ${offset}`;
+}
+
+function buildXmlItem() {
+  const title  = document.getElementById('itemTitle').value.trim();
+  const desc   = document.getElementById('itemDesc').value.trim();
+  const url    = document.getElementById('mediaUrl').value.trim();
+  const mime   = document.getElementById('mimeType').value;
+  const len    = document.getElementById('fileLength').value || '0';
+  const guidRaw= document.getElementById('itemGuid').value.trim();
+  const guid   = guidRaw || extractGuid(url);
+  const date   = getPubDate();
+  if (!title || !url) return null;
+  return `\n<item>\n<title>${esc(title)}</title>\n<link>${esc(url)}</link>\n<description>${esc(desc)}</description>\n<pubDate>${date}</pubDate>\n<guid isPermaLink="false">${guid}</guid>\n<enclosure length="${len}" type="${mime}" url="${esc(url)}"/>\n</item>\n`;
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateXmlPreview() {
+  const item = buildXmlItem();
+  document.getElementById('xmlPreview').textContent = item || '← Compila titolo e URL per visualizzare l\'anteprima XML';
+}
+
+// ─── GITHUB PUBLISH ──────────────────────────────────────────────────────────
+async function publishItem() {
+  if (!config.token) { showToast('Configura GitHub prima', 'error'); return; }
+  const newItem = buildXmlItem();
+  if (!newItem) { showToast('Compila Titolo e URL prima', 'error'); return; }
+
+  const btn    = document.getElementById('submitBtn');
+  const status = document.getElementById('submitStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> CARICAMENTO XML...';
+
+  try {
+    status.textContent = '1/3 — Lettura file XML da GitHub...';
+    const getResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}?ref=${config.branch}`, {
+      headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!getResp.ok) { const e = await getResp.json(); throw new Error(`GitHub API: ${e.message || getResp.status}`); }
+    const fileData   = await getResp.json();
+    const sha        = fileData.sha;
+    const currentXml = atob(fileData.content.replace(/\n/g,''));
+
+    status.textContent = '2/3 — Inserimento nuovo item...';
+    let updatedXml;
+    const MARKER = '<!-- Puntate Giornaliere -->';
+    const idx = currentXml.indexOf(MARKER);
+    if (idx !== -1) {
+      updatedXml = currentXml.slice(0, idx + MARKER.length) + '\n' + newItem + currentXml.slice(idx + MARKER.length);
+    } else {
+      const itemIdx = currentXml.indexOf('<item>');
+      updatedXml = itemIdx !== -1
+        ? currentXml.slice(0, itemIdx) + newItem + '\n' + currentXml.slice(itemIdx)
+        : currentXml.replace('</channel>', newItem + '\n</channel>');
+    }
+    updatedXml = updatedXml.replace(/<lastBuildDate>[^<]*<\/lastBuildDate>/, `<lastBuildDate>${getPubDate()}</lastBuildDate>`);
+
+    status.textContent = '3/3 — Pubblicazione su GitHub...';
+    const title    = document.getElementById('itemTitle').value.trim();
+    const putResp  = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `Add: ${title}`, content: btoa(unescape(encodeURIComponent(updatedXml))), sha, branch: config.branch })
+    });
+    if (!putResp.ok) { const e = await putResp.json(); throw new Error(`Push fallito: ${e.message || putResp.status}`); }
+
+    status.textContent = '';
+    btn.innerHTML = '⇑ PUBBLICA SU GITHUB';
+    btn.disabled  = false;
+    showToast(`✓ "${title}" pubblicato su GitHub!`, 'success');
+    document.getElementById('mediaUrl').value = '';
+    document.getElementById('itemGuid').value  = '';
+    updateXmlPreview();
+
+  } catch(e) {
+    btn.innerHTML = '⇑ PUBBLICA SU GITHUB';
+    btn.disabled  = false;
+    status.textContent = '';
+    showToast('Errore: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+// ─── EXPORT / IMPORT TIPI ────────────────────────────────────────────────────
+function exportTypes() {
+  if (!customTypes.length) { showToast('Nessun tipo personalizzato da esportare', 'info'); return; }
+  const json = JSON.stringify(customTypes, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'zoo105_tipi.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${customTypes.length} tipi esportati ✓`, 'success');
+}
+
+function importTypes(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error('Formato non valido');
+      // Merge: skip IDs already present, add new ones
+      let added = 0;
+      imported.forEach(t => {
+        if (!t.id || !t.label || !t.maskTitle) return;
+        // Give fresh ID to avoid collisions
+        const newId = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+        customTypes.push({ ...t, id: newId });
+        added++;
+      });
+      saveCustomTypes();
+      renderTypeGrids();
+      showToast(`${added} tipi importati ✓`, 'success');
+    } catch(err) {
+      showToast('File non valido: ' + err.message, 'error');
+    }
+    // Reset file input so same file can be re-imported
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 4500);
+}
+
+// ─── DATE CHANGE LISTENERS ───────────────────────────────────────────────────
+['day','month','year'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (selectedType) autoFillFromType();
+    updateXmlPreview();
+  });
+});
+
+// Click outside overlay to close
+['configOverlay','typeOverlay'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target.id === id) closeOverlay(id);
+  });
+});
+
+init();
+</script>
+</body>
+</html>
