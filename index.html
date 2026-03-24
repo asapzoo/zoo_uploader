@@ -415,6 +415,8 @@
       </div>
     </div>
 
+    <button class="btn-secondary" onclick="resetSection02()" style="margin-top:4px;color:var(--accent);border-color:rgba(255,60,60,.3)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='rgba(255,60,60,.3)'">✕ Reset campi</button>
+
   </div>
 
   <!-- STEP 3: TITOLO & DESCRIZIONE -->
@@ -775,16 +777,23 @@ function onUrlChange() {
     document.getElementById('fileLength').value  = '0';
   }
   const guidField = document.getElementById('itemGuid');
-  if (!guidField.value.trim()) {
-    const extracted = extractGuid(url);
-    if (extracted && extracted !== url) guidField.value = extracted;
-  }
+  const extracted = extractGuid(url);
+  if (extracted && extracted !== url) guidField.value = extracted;
+  else guidField.value = '';
   updateXmlPreview();
 }
 
 function autoGuid() {
   const url = document.getElementById('mediaUrl').value.trim();
   document.getElementById('itemGuid').value = extractGuid(url) || '';
+  updateXmlPreview();
+}
+
+function resetSection02() {
+  document.getElementById('mediaUrl').value  = '';
+  document.getElementById('itemGuid').value  = '';
+  document.getElementById('fileLength').value = '100123123';
+  document.getElementById('mimeType').value   = 'audio/mpeg';
   updateXmlPreview();
 }
 
