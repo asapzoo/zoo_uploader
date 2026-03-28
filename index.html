@@ -874,17 +874,21 @@ async function publishItem() {
         : currentXml.replace('</channel>', newItem + '\n</channel>');
     }
 
-    // Aggiorna pubDate di tutti gli item fissi PRIMA del marker (safe: se non ce ne sono non fa nulla)
+    // Calcola la data UNA SOLA VOLTA per coerenza tra tutti i tag
+    const pubDateNow = getPubDate();
+
+    // Aggiorna lastBuildDate (regex robusta: tollera spazi e newline)
+    updatedXml = updatedXml.replace(/<lastBuildDate>[\s\S]*?<\/lastBuildDate>/, `<lastBuildDate>${pubDateNow}</lastBuildDate>`);
+
+    // Aggiorna pubDate di tutti gli item fissi PRIMA del marker
     const markerPos = updatedXml.indexOf(MARKER);
     if (markerPos !== -1) {
       const beforeMarker  = updatedXml.slice(0, markerPos);
       const afterMarker   = updatedXml.slice(markerPos);
-      const updatedBefore = beforeMarker.replace(/<pubDate>[^<]*<\/pubDate>/g, `<pubDate>${getPubDate()}</pubDate>`);
+      // Regex robusta: tollera spazi e newline dentro il tag
+      const updatedBefore = beforeMarker.replace(/<pubDate>[\s\S]*?<\/pubDate>/g, `<pubDate>${pubDateNow}</pubDate>`);
       updatedXml = updatedBefore + afterMarker;
     }
-
-    // Aggiorna lastBuildDate
-    updatedXml = updatedXml.replace(/<lastBuildDate>[^<]*<\/lastBuildDate>/, `<lastBuildDate>${getPubDate()}</lastBuildDate>`);
 
     status.textContent = '3/3 — Pubblicazione su GitHub...';
     const title    = document.getElementById('itemTitle').value.trim();
