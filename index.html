@@ -873,22 +873,44 @@ async function publishItem() {
         ? currentXml.slice(0, itemIdx) + newItem + '\n' + currentXml.slice(itemIdx)
         : currentXml.replace('</channel>', newItem + '\n</channel>');
     }
-
-    // Calcola la data UNA SOLA VOLTA per coerenza tra tutti i tag
+    // ── Aggiorna date con DOMParser (più affidabile della regex) ──────────────
     const pubDateNow = getPubDate();
+    try {
+      const parser  = new DOMParser();
+      const xmlDoc  = parser.parseFromString(updatedXml, 'text/xml');
 
-    // Aggiorna lastBuildDate (regex robusta: tollera spazi e newline)
-    updatedXml = updatedXml.replace(/<lastBuildDate>[\s\S]*?<\/lastBuildDate>/, `<lastBuildDate>${pubDateNow}</lastBuildDate>`);
+      // lastBuildDate
+      const lbd = xmlDoc.querySelector('lastBuildDate');
+      if (lbd) lbd.textContent = pubDateNow;
 
-    // Aggiorna pubDate di tutti gli item fissi PRIMA del marker
-    const markerPos = updatedXml.indexOf(MARKER);
-    if (markerPos !== -1) {
-      const beforeMarker  = updatedXml.slice(0, markerPos);
-      const afterMarker   = updatedXml.slice(markerPos);
-      // Regex robusta: tollera spazi e newline dentro il tag
-      const updatedBefore = beforeMarker.replace(/<pubDate>[\s\S]*?<\/pubDate>/g, `<pubDate>${pubDateNow}</pubDate>`);
-      updatedXml = updatedBefore + afterMarker;
+      // pubDate di tutti gli item PRIMA del marker <!-- Puntate Giornaliere -->
+      const channel   = xmlDoc.querySelector('channel');
+      const childNodes = Array.from(channel.childNodes);
+      for (const node of childNodes) {
+        // Ci fermiamo quando troviamo il commento marcatore
+        if (node.nodeType === 8 && node.nodeValue.trim() === 'Puntate Giornaliere') break;
+        if (node.nodeName === 'item') {
+          const pd = node.querySelector('pubDate');
+          if (pd) pd.textContent = pubDateNow;
+        }
+      }
+
+      // Serializza preservando dichiarazione XML e stylesheet
+      const xmlDecl    = updatedXml.match(/^<\?xml[^?]*\?>/);
+      const stylesheet = updatedXml.match(/<\?xml-stylesheet[^?]*\?>/);
+      let serialized   = new XMLSerializer().serializeToString(xmlDoc);
+      serialized = serialized.replace(/^<\?xml[^?]*\?>/, '');
+      let header = '';
+      if (xmlDecl)    header += xmlDecl[0]    + '\n';
+      if (stylesheet) header += stylesheet[0] + '\n';
+      updatedXml = header + serialized;
+
+    } catch(e) {
+      // Fallback sicuro solo per lastBuildDate
+      console.warn('DOMParser fallback:', e);
+      updatedXml = updatedXml.replace(/<lastBuildDate>[^<]*<\/lastBuildDate>/, `<lastBuildDate>${pubDateNow}</lastBuildDate>`);
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     status.textContent = '3/3 — Pubblicazione su GitHub...';
     const title    = document.getElementById('itemTitle').value.trim();
