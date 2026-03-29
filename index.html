@@ -513,77 +513,17 @@ let editingTypeId  = null; // id of type being edited, null = new
 // ─── AGGIORNA DATE FISSI ─────────────────────────────────────────────────────
 let datesFissiAggiornati = false;
 
-async function aggiornaDateFissi() {
-  if (!config.token) { showToast('Configura GitHub prima', 'error'); return; }
+function aggiornaDateFissi() {
+  // Aggiorna solo il flag in memoria.
+  // Le date fissi verranno aggiornate su GitHub in un'unica
+  // operazione atomica insieme al nuovo item dentro publishItem().
+  datesFissiAggiornati = true;
   const btn  = document.getElementById('btnUpdateDates');
   const hint = document.getElementById('datesHint');
-  btn.className = 'btn-update-dates loading';
-  btn.textContent = '⏳ Aggiornamento in corso...';
-
-  try {
-    // Leggi RSS da GitHub
-    const getResp = await fetch(
-      `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}?ref=${config.branch}`,
-      { headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' } }
-    );
-    if (!getResp.ok) { const e = await getResp.json(); throw new Error(e.message || getResp.status); }
-    const fileData  = await getResp.json();
-    const sha       = fileData.sha;
-    let   xml       = atob(fileData.content.replace(/\n/g, ''));
-
-    const MARKER    = '<!-- Puntate Giornaliere -->';
-    const markerIdx = xml.indexOf(MARKER);
-    if (markerIdx === -1) throw new Error('Marker non trovato nel RSS');
-
-    // Prendi tutto prima del marker e aggiorna i <pubDate> con split (no regex)
-    const before    = xml.slice(0, markerIdx);
-    const after     = xml.slice(markerIdx);
-    const newDate   = getPubDate();
-
-    // Split su <pubDate> e </pubDate> - funziona sempre indipendentemente da spazi
-    const parts     = before.split('<pubDate>');
-    let rebuiltBefore = parts[0];
-    for (let i = 1; i < parts.length; i++) {
-      const closeIdx = parts[i].indexOf('</pubDate>');
-      if (closeIdx !== -1) {
-        rebuiltBefore += '<pubDate>' + newDate + '</pubDate>' + parts[i].slice(closeIdx + 10);
-      } else {
-        rebuiltBefore += '<pubDate>' + parts[i]; // malformato, lascia intatto
-      }
-    }
-
-    // Aggiorna anche lastBuildDate con split
-    let updatedXml = rebuiltBefore + after;
-    const lbdParts = updatedXml.split('<lastBuildDate>');
-    if (lbdParts.length > 1) {
-      const afterLbd = lbdParts[1].split('</lastBuildDate>');
-      updatedXml = lbdParts[0] + '<lastBuildDate>' + newDate + '</lastBuildDate>' + afterLbd.slice(1).join('</lastBuildDate>');
-    }
-
-    // Scrivi su GitHub
-    const putResp = await fetch(
-      `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`,
-      {
-        method: 'PUT',
-        headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: 'Update: date item fissi', content: btoa(unescape(encodeURIComponent(updatedXml))), sha, branch: config.branch })
-      }
-    );
-    if (!putResp.ok) { const e = await putResp.json(); throw new Error(e.message || putResp.status); }
-
-    // Successo
-    datesFissiAggiornati = true;
-    btn.className   = 'btn-update-dates done';
-    btn.innerHTML   = '✓ DATE AGGIORNATE — PUOI PUBBLICARE';
-    hint.style.display = 'none';
-    showToast('✓ Date item fissi aggiornate!', 'success');
-
-  } catch(e) {
-    btn.className   = 'btn-update-dates';
-    btn.innerHTML   = '📅 AGGIORNA DATA ITEM FISSI';
-    showToast('Errore: ' + e.message, 'error');
-    console.error(e);
-  }
+  btn.className = 'btn-update-dates done';
+  btn.innerHTML = '✓ DATE PRONTE — VERRANNO AGGIORNATE AL PUBLISH';
+  hint.style.display = 'none';
+  showToast('✓ Date pronte! Compila i campi e premi Pubblica.', 'success');
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
@@ -939,7 +879,8 @@ function buildXmlItem() {
   const guid   = guidRaw || extractGuid(url);
   const date   = getPubDate();
   if (!title || !url) return null;
-  return `\n<item>\n<title>${esc(title)}</title>\n<link>${esc(url)}</link>\n<description>${esc(desc)}</description>\n<pubDate>${date}</pubDate>\n<guid isPermaLink="false">${guid}</guid>\n<enclosure length="${len}" type="${mime}" url="${esc(url)}"/>\n</item>\n`;
+  // Niente righe vuote iniziali/finali: ogni tag su riga propria, nessun \n extra
+  return `<item>\n<title>${esc(title)}</title>\n<link>${esc(url)}</link>\n<description>${esc(desc)}</description>\n<pubDate>${date}</pubDate>\n<guid isPermaLink="false">${guid}</guid>\n<enclosure length="${len}" type="${mime}" url="${esc(url)}"/>\n</item>`;
 }
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -956,8 +897,6 @@ async function publishItem() {
   if (!newItem) { showToast('Compila Titolo e URL prima', 'error'); return; }
   if (!datesFissiAggiornati) {
     document.getElementById('datesHint').style.display = 'block';
-    document.getElementById('btnUpdateDates').style.animation = 'none';
-    setTimeout(() => document.getElementById('btnUpdateDates').style.animation = '', 10);
     showToast('⚠ Prima aggiorna le date degli item fissi!', 'error');
     document.getElementById('btnUpdateDates').scrollIntoView({ behavior: 'smooth' });
     return;
@@ -970,38 +909,59 @@ async function publishItem() {
 
   try {
     status.textContent = '1/3 — Lettura file XML da GitHub...';
-    const getResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}?ref=${config.branch}`, {
-      headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
-    });
+    const getResp = await fetch(
+      `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}?ref=${config.branch}`,
+      { headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' } }
+    );
     if (!getResp.ok) { const e = await getResp.json(); throw new Error(`GitHub API: ${e.message || getResp.status}`); }
     const fileData   = await getResp.json();
     const sha        = fileData.sha;
-    const currentXml = atob(fileData.content.replace(/\n/g,''));
+    let   currentXml = atob(fileData.content.replace(/\n/g,''));
 
-    status.textContent = '2/3 — Inserimento nuovo item...';
-    let updatedXml;
+    status.textContent = '2/3 — Aggiornamento date fissi + inserimento item...';
     const MARKER = '<!-- Puntate Giornaliere -->';
-    const idx = currentXml.indexOf(MARKER);
-    if (idx !== -1) {
-      updatedXml = currentXml.slice(0, idx + MARKER.length) + '\n' + newItem + currentXml.slice(idx + MARKER.length);
-    } else {
-      const itemIdx = currentXml.indexOf('<item>');
-      updatedXml = itemIdx !== -1
-        ? currentXml.slice(0, itemIdx) + newItem + '\n' + currentXml.slice(itemIdx)
-        : currentXml.replace('</channel>', newItem + '\n</channel>');
+    const markerIdx = currentXml.indexOf(MARKER);
+    if (markerIdx === -1) throw new Error('Marker "' + MARKER + '" non trovato nel RSS');
+
+    const newDate = getPubDate();
+
+    // ── Aggiorna pubDate degli item fissi (prima del marker) ──────────────
+    const beforeMarker = currentXml.slice(0, markerIdx);
+    const afterMarker  = currentXml.slice(markerIdx + MARKER.length);
+
+    const parts = beforeMarker.split('<pubDate>');
+    let rebuiltBefore = parts[0];
+    for (let i = 1; i < parts.length; i++) {
+      const ci = parts[i].indexOf('</pubDate>');
+      if (ci !== -1) {
+        rebuiltBefore += '<pubDate>' + newDate + '</pubDate>' + parts[i].slice(ci + 10);
+      } else {
+        rebuiltBefore += '<pubDate>' + parts[i];
+      }
     }
-    // Aggiorna solo lastBuildDate (le date degli item fissi le gestisce aggiornaDateFissi)
-    updatedXml = updatedXml.split('<lastBuildDate>')[0]
-      + '<lastBuildDate>' + getPubDate() + '</lastBuildDate>'
-      + updatedXml.split('</lastBuildDate>').slice(1).join('</lastBuildDate>');
+
+    // ── Inserisci nuovo item subito dopo il marker, senza righe vuote ─────
+    // Rimuove spazi/newline iniziali del blocco "after" per compattare
+    const afterTrimmed = afterMarker.replace(/^[\r\n\s]+/, '');
+    let updatedXml = rebuiltBefore + MARKER + '\n' + newItem + '\n' + afterTrimmed;
+
+    // ── Aggiorna lastBuildDate ────────────────────────────────────────────
+    const lbdParts = updatedXml.split('<lastBuildDate>');
+    if (lbdParts.length > 1) {
+      const rest = lbdParts[1].split('</lastBuildDate>');
+      updatedXml = lbdParts[0] + '<lastBuildDate>' + newDate + '</lastBuildDate>' + rest.slice(1).join('</lastBuildDate>');
+    }
 
     status.textContent = '3/3 — Pubblicazione su GitHub...';
-    const title    = document.getElementById('itemTitle').value.trim();
-    const putResp  = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`, {
-      method: 'PUT',
-      headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `Add: ${title}`, content: btoa(unescape(encodeURIComponent(updatedXml))), sha, branch: config.branch })
-    });
+    const title   = document.getElementById('itemTitle').value.trim();
+    const putResp = await fetch(
+      `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`,
+      {
+        method: 'PUT',
+        headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `Add: ${title}`, content: btoa(unescape(encodeURIComponent(updatedXml))), sha, branch: config.branch })
+      }
+    );
     if (!putResp.ok) { const e = await putResp.json(); throw new Error(`Push fallito: ${e.message || putResp.status}`); }
 
     status.textContent = '';
@@ -1013,8 +973,8 @@ async function publishItem() {
     // Reset pulsante date per il prossimo giorno
     datesFissiAggiornati = false;
     const dbtn = document.getElementById('btnUpdateDates');
-    dbtn.className   = 'btn-update-dates';
-    dbtn.innerHTML   = '📅 AGGIORNA DATA ITEM FISSI';
+    dbtn.className = 'btn-update-dates';
+    dbtn.innerHTML = '📅 AGGIORNA DATA ITEM FISSI';
     updateXmlPreview();
 
   } catch(e) {
